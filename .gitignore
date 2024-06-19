@@ -1,3 +1,8 @@
 3dmm_data/No Need/
 test.jpg
 test.mp4
+utils/__pycache__
+Sim3DR/__pycache__
+FaceBoxes/__pycache__
+backbone_nets/__pycache__
+__pycache__/
