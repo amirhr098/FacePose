@@ -27,7 +27,7 @@ print(translation)
 # Sample 2
 # Get the pose from a video
 cam = cv2.VideoCapture("test.mp4")
-all_poses = facepose.video_pose(cam, mode=3, frame_num_max=10)
+all_poses = facepose.video_pose(cam, mode=3, frame_num_max=10, show=True, frame_weights=[10,3,3])
 
 print("Total number of frames: ", len(all_poses))
 print(len(all_poses))
@@ -38,6 +38,6 @@ print("First frame Translation [X, Y] (Nosetip X and Y)")
 print(all_poses[0][1])
 
 # Other Functions
-#facepose.reset_buffers()
+facepose.reset_buffers()
 
-#del facepose
+del facepose

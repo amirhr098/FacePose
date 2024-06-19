@@ -23,9 +23,9 @@ face_boxes = FaceBoxes()
 IMG_SIZE = 120
 GPU = 0
 
-tdx_buf = -1
-tdy_buf = -1
-rots_buf = [0,0,0]
+tdx_buf = []
+tdy_buf = []
+rots_buf = []
 counter = 0
 
 six_transforms = transforms.Compose([transforms.Resize(256),
@@ -205,7 +205,7 @@ def load_sixModel(six_path = 'pretrained/6DRepNet360_Full-Rotation_300W_LP+Panop
     
     return model
 
-def get_rt(six_model, syn_model, img_ori, mode_num):
+def get_rt(six_model, syn_model, img_ori, mode_num, frame_weights = [0.5, 0.5]):
     """
     Get the rotation and translation values from the given image using the SixDRepNet360 model and the SynergyNet model.
 
@@ -213,13 +213,14 @@ def get_rt(six_model, syn_model, img_ori, mode_num):
         six_model (torch.nn.Module): The SixDRepNet360 model for 6D facial pose estimation.
         syn_model (torch.nn.Module): The SynergyNet model for facial landmark detection.
         img_ori (numpy.ndarray): The input image.
-        mode_num (int): The mode number to determine when to update the rotation values. If -1, no updates are made.
+        mode_num (int): The mode number to determine when to update the rotation values. If -1, only SynergyNet Model is used.
 
     Returns:
         List[float]: The rotation values in degrees.
         List[float]: The translation values.
     """
     global tdx_buf, tdy_buf, rots_buf, counter
+    buffer_num = len(frame_weights)
     # Transform image to Tensor
     # Predicting
     with torch.no_grad():
@@ -241,18 +242,23 @@ def get_rt(six_model, syn_model, img_ori, mode_num):
         counter += 1
 
         # If the translation values have been set, calculate the averaged values
-        if tdx_buf != -1:
-            tdx = (tdx + tdx_buf) / 2
-            tdy = (tdy + tdy_buf) / 2
-            angles[0] = (angles[0] + rots_buf[0]) / 2
-            angles[1] = (angles[1] + rots_buf[1]) / 2
-            angles[2] = (angles[2] + rots_buf[2]) / 2
+        if len(tdx_buf) == (buffer_num-1):
+            tdx = (tdx * frame_weights[0] + np.sum(np.array(tdx_buf) * np.array(frame_weights[1:]))) / sum(frame_weights)
+            tdy = (tdy * frame_weights[0] + np.sum(np.array(tdy_buf) * np.array(frame_weights[1:]))) / sum(frame_weights)
+            angles[0],angles[1],angles[2] = (np.array([angles[0],angles[1],angles[2]]) * frame_weights[0] + np.sum((np.array(rots_buf).T * np.array(frame_weights[1:])).T, axis=0)) / sum(frame_weights)
+            # tdx = (tdx + tdx_buf) / 2
+            # tdy = (tdy + tdy_buf) / 2
+            # angles[0] = (angles[0] + rots_buf[0]) / 2
+            # angles[1] = (angles[1] + rots_buf[1]) / 2
+            # angles[2] = (angles[2] + rots_buf[2]) / 2
 
-        tdx_buf = tdx
-        tdy_buf = tdy
-        rots_buf[0] = angles[0]
-        rots_buf[1] = angles[1]
-        rots_buf[2] = angles[2]
+        tdx_buf.insert(0,tdx)
+        tdy_buf.insert(0,tdy)
+        rots_buf.insert(0,[angles[0],angles[1],angles[2]])
+        if(len(tdx_buf) >= buffer_num):
+            del tdx_buf[-1]
+            del tdy_buf[-1]
+            del rots_buf[-1]
 
     return [angles[0], angles[1], angles[2]], [tdx, tdy]
     
@@ -280,7 +286,7 @@ class FacePose:
         # Load the 6DRepNet model
         self.six_model = load_sixModel(six_path=sixdrepnetmodel_path)  # Load the 6DRepNet model
 
-    def get_pose(self, img, mode=1):
+    def get_pose(self, img, mode=1, frame_weights=[0.5, 0.5]):
         """
         Get the pose of a face from an image using the SynergyNet and 6DRepNet models.
 
@@ -291,6 +297,8 @@ class FacePose:
                 - 1: Uses both models in the same time.
                 - 2: Uses only the Synergy Model.
                 - 3: Uses both models in rotating manner.
+
+            frame_weights (list, optional): The weights of the past frames and current frame for pose calculation. The order of input is as follow: [cuurent_frame , first_past_frame, second_past_frame, ...]
 
         Returns:
             list: A list containing the rotation and nose coordinates [Yaw, Pitch, Roll], [Nose X, Nose Y].
@@ -303,17 +311,17 @@ class FacePose:
 
         if mode == 1:
             # This Mode uses both models in the same time
-            return get_rt(self.six_model, self.syn_model, img, mode_num=1)
+            return get_rt(self.six_model, self.syn_model, img, mode_num=1, frame_weights=frame_weights)
         elif mode == 2:
             # This Mode uses only the Synergy Model
-            return get_rt(self.six_model, self.syn_model, img, mode_num=-1)
+            return get_rt(self.six_model, self.syn_model, img, mode_num=-1, frame_weights=frame_weights)
         elif mode == 3:
             # This Mode uses both models in rotating manner
             # (one 6DRepNet and one SynergyNet)
-            return get_rt(self.six_model, self.syn_model, img, mode_num=2)
+            return get_rt(self.six_model, self.syn_model, img, mode_num=2, frame_weights=frame_weights)
         else:
             # This Mode uses only the Synergy Model
-            return get_rt(self.six_model, self.syn_model, img, mode_num=-1)
+            return get_rt(self.six_model, self.syn_model, img, mode_num=-1, frame_weights=frame_weights)
         # Output is [Yaw, Pitch, Roll], [Nose X, Nose Y]
     
     def __call__(self, img, mode=1):
@@ -357,28 +365,32 @@ class FacePose:
 
         """
         # Reset the translation buffer x
-        tdx_buf = -1
+        tdx_buf = []
 
         # Reset the translation buffer y
-        tdy_buf = -1
+        tdy_buf = []
 
         # Reset the rotation buffer
-        rots_buf = [0, 0, 0]
+        rots_buf = []
 
         # Reset the counter to 0
         counter = 0
 
-    def video_pose(self, cam: cv2.VideoCapture, mode=1, frame_num_max=np.inf):
+    def video_pose(self, cam: cv2.VideoCapture, mode=1, frame_num_max=np.inf, show=False, frame_weights=[0.5, 0.5]):
         """
         Obtains the pose of a face from each frame of a video stream.
 
         Args:
             cam (cv2.VideoCapture): The video capture object.
             mode (int, optional): The mode to use. Defaults to 1.
+
                 - 1: Uses both models in the same time.
                 - 2: Uses only the Synergy Model.
                 - 3: Uses both models in rotating manner.
+
             frame_num_max (int, optional): The maximum number of frames to process. Defaults to np.inf.
+            show (Boolean, optional): If True, an OpenCV window will show the results of each frame.
+            frame_weights (list, optional): The weights of the past frames and current frame for pose calculation. The order of input is as follow: [cuurent_frame , first_past_frame, second_past_frame, ...]
 
         Returns:
             numpy.ndarray: An array containing the rotation and nose coordinates [Yaw, Pitch, Roll], [Nose X, Nose Y] for each frame.
@@ -410,11 +422,24 @@ class FacePose:
             frame = cv2.filter2D(frame, -1, kernel)
 
             # Obtain the pose of the face from the image
-            pose = self.get_pose(frame, mode)
+            pose = self.get_pose(frame, mode, frame_weights=frame_weights)
 
             # Append the pose to the list
             all_poses.append(pose)
 
+            # if show is True, show the output on the images with OpenCV
+
+            # You should change the `cv2.resize` line as needed. 
+            # Also `size` arg in `draw axis` if it's too small or big
+            if show:
+                frame = sixutils.draw_axis(frame,pose[0][0],pose[0][1],pose[0][2],pose[1][0],pose[1][1], size = 200)
+                frame = cv2.resize(frame,(480,720))
+                cv2.imshow("Pose", frame)
+                cv2.waitKey(1)
+        
+        if show:
+            cv2.destroyAllWindows()
+        
         # Return the array of poses
-        return np.array(all_poses)
+        return np.array(all_poses, dtype=object)
             
