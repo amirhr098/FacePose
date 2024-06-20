@@ -1,3 +1,11 @@
 3dmm_data/No Need/
 test.jpg
 test.mp4
+utils/__pycache__/
+FaceBoxes/models/__pycache__/
+FaceBoxes/__pycache__/
+FaceBoxes/utils/__pycache__/
+FaceBoxes/utils/nms/__pycache__/
+backbone_nets/__pycache__/
+backbone_nets/ResNeSt/__pycache__/
+__pycache__/
