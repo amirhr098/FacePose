@@ -289,7 +289,6 @@ class FacePose:
 
         self.default_frame_weights = frame_weights
         
-
     def get_pose(self, img, mode=1, frame_weights=[0.5, 0.5]):
         """
         Get the pose of a face from an image using the SynergyNet and 6DRepNet models.
