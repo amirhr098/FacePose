@@ -22,7 +22,7 @@ from FaceBoxes import FaceBoxes
 face_boxes = FaceBoxes()
 IMG_SIZE = 120
 GPU = 0
-default_frame_weights = None
+
 tdx_buf = []
 tdy_buf = []
 rots_buf = []
@@ -260,12 +260,12 @@ def get_rt(six_model, syn_model, img_ori, mode_num, frame_weights = [0.5, 0.5]):
             del tdy_buf[-1]
             del rots_buf[-1]
 
-    return [angles[0], angles[1], angles[2]], [tdx, tdy]
+    return [angles[0], angles[1], angles[2]], [int(tdx), int(tdy)]
     
 
 
 class FacePose:
-    def __init__(self, synergymodel_path = 'pretrained/best.pth.tar', sixdrepnetmodel_path = 'pretrained/6DRepNet360_Full-Rotation_300W_LP+Panoptic.pth', frame_weigthts = None):
+    def __init__(self, synergymodel_path = 'pretrained/best.pth.tar', sixdrepnetmodel_path = 'pretrained/6DRepNet360_Full-Rotation_300W_LP+Panoptic.pth', frame_weights = None):
         """
         Initialize the FacePose object with the given paths.
 
@@ -287,8 +287,8 @@ class FacePose:
         # Load the 6DRepNet model
         self.six_model = load_sixModel(six_path=sixdrepnetmodel_path)  # Load the 6DRepNet model
 
-        if frame_weigthts is not None:
-            default_frame_weights = frame_weigthts
+        self.default_frame_weights = frame_weights
+        
 
     def get_pose(self, img, mode=1, frame_weights=[0.5, 0.5]):
         """
@@ -307,8 +307,8 @@ class FacePose:
         Returns:
             list: A list containing the rotation and nose coordinates [Yaw, Pitch, Roll], [Nose X, Nose Y].
         """
-        if default_frame_weights is not None:
-            frame_weights = default_frame_weights
+        if self.default_frame_weights is not None:
+            frame_weights = self.default_frame_weights
 
         # Smoothing Filter (Good for High-Res Images)
         if (img.shape[0] > 360) or (img.shape[1] > 360):
@@ -330,7 +330,7 @@ class FacePose:
             return get_rt(self.six_model, self.syn_model, img, mode_num=-1, frame_weights=frame_weights)
         # Output is [Yaw, Pitch, Roll], [Nose X, Nose Y]
     
-    def __call__(self, img, mode=1):
+    def __call__(self, img, mode=1, frame_weights=[0.5, 0.5]):
         """
         Get the pose of a face from an image using the SynergyNet and 6DRepNet models.
 
@@ -346,7 +346,7 @@ class FacePose:
             list: A list containing the rotation and nose coordinates [Yaw, Pitch, Roll], [Nose X, Nose Y].
         """
         # Obtain the pose of the face from the image
-        return self.get_pose(img, mode)
+        return self.get_pose(img, mode, frame_weights)
 
     def __del__(self):
         """
@@ -402,8 +402,8 @@ class FacePose:
             numpy.ndarray: An array containing the rotation and nose coordinates [Yaw, Pitch, Roll], [Nose X, Nose Y] for each frame.
         """
 
-        if default_frame_weights is not None:
-            frame_weights = default_frame_weights
+        if self.default_frame_weights is not None:
+            frame_weights = self.default_frame_weights
 
         # Check if the video capture object is open
         try:
@@ -426,10 +426,6 @@ class FacePose:
             if (not ret) or (len(all_poses) >= frame_num_max):
                 break
 
-            # Apply smoothing filter to the frame (Good for High-Res Images)
-            kernel = np.ones((5, 5), np.float32) / 25
-            frame = cv2.filter2D(frame, -1, kernel)
-
             # Obtain the pose of the face from the image
             pose = self.get_pose(frame, mode, frame_weights=frame_weights)
 
@@ -442,7 +438,7 @@ class FacePose:
             # Also `size` arg in `draw axis` if it's too small or big
             if show:
                 frame = sixutils.draw_axis(frame,pose[0][0],pose[0][1],pose[0][2],pose[1][0],pose[1][1], size = 200)
-                frame = cv2.resize(frame,(480,720))
+                frame = cv2.resize(frame,(400,600))
                 cv2.imshow("Pose", frame)
                 cv2.waitKey(1)
         

@@ -5,7 +5,8 @@ import cv2
 print("Loading FacePose Model")
 facepose = FacePose(
     synergymodel_path='pretrained/best.pth.tar', 
-    sixdrepnetmodel_path='pretrained/6DRepNet360_Full-Rotation_300W_LP+Panoptic.pth')
+    sixdrepnetmodel_path='pretrained/6DRepNet360_Full-Rotation_300W_LP+Panoptic.pth',
+    frame_weights=[8,5,2])
 
 # Usage Examples
 # Sample 1
@@ -17,7 +18,7 @@ image = cv2.imread("test.jpg")
 rotation, translation = facepose(image, mode=3)
 
 # Calling the get_pose function
-rotation, translation = facepose.get_pose(image, mode=3, frame_weights=[8,5,2])
+rotation, translation = facepose.get_pose(image, mode=3)
 
 print("Rotation [Yaw, Pitch, Roll]")
 print(rotation)
@@ -27,7 +28,7 @@ print(translation)
 # Sample 2
 # Get the pose from a video
 cam = cv2.VideoCapture("test.mp4")
-all_poses = facepose.video_pose(cam, mode=3, frame_num_max=10, show=True, frame_weights=[10,3,3])
+all_poses = facepose.video_pose(cam, mode=3, frame_num_max=20, show=True)
 
 print("Total number of frames: ", len(all_poses))
 
