@@ -22,7 +22,7 @@ from FaceBoxes import FaceBoxes
 face_boxes = FaceBoxes()
 IMG_SIZE = 120
 GPU = 0
-
+default_frame_weights = None
 tdx_buf = []
 tdy_buf = []
 rots_buf = []
@@ -265,13 +265,14 @@ def get_rt(six_model, syn_model, img_ori, mode_num, frame_weights = [0.5, 0.5]):
 
 
 class FacePose:
-    def __init__(self, synergymodel_path = 'pretrained/best.pth.tar', sixdrepnetmodel_path = 'pretrained/6DRepNet360_Full-Rotation_300W_LP+Panoptic.pth'):
+    def __init__(self, synergymodel_path = 'pretrained/best.pth.tar', sixdrepnetmodel_path = 'pretrained/6DRepNet360_Full-Rotation_300W_LP+Panoptic.pth', frame_weigthts = None):
         """
         Initialize the FacePose object with the given paths.
 
         Args:
             synergymodel_path (str): Path to the SynergyNet model checkpoint.
             sixdrepnetmodel_path (str): Path to the 6DRepNet model checkpoint.
+            frame_weights (list, optional): The weights of the past frames and current frame for pose calculation. The order of input is as follow: [cuurent_frame , first_past_frame, second_past_frame, ...]
         """
         # Parse command line arguments
         parser = argparse.ArgumentParser()
@@ -285,6 +286,9 @@ class FacePose:
 
         # Load the 6DRepNet model
         self.six_model = load_sixModel(six_path=sixdrepnetmodel_path)  # Load the 6DRepNet model
+
+        if frame_weigthts is not None:
+            default_frame_weights = frame_weigthts
 
     def get_pose(self, img, mode=1, frame_weights=[0.5, 0.5]):
         """
@@ -303,6 +307,8 @@ class FacePose:
         Returns:
             list: A list containing the rotation and nose coordinates [Yaw, Pitch, Roll], [Nose X, Nose Y].
         """
+        if default_frame_weights is not None:
+            frame_weights = default_frame_weights
 
         # Smoothing Filter (Good for High-Res Images)
         if (img.shape[0] > 360) or (img.shape[1] > 360):
@@ -395,6 +401,9 @@ class FacePose:
         Returns:
             numpy.ndarray: An array containing the rotation and nose coordinates [Yaw, Pitch, Roll], [Nose X, Nose Y] for each frame.
         """
+
+        if default_frame_weights is not None:
+            frame_weights = default_frame_weights
 
         # Check if the video capture object is open
         try:
