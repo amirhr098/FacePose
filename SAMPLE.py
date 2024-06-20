@@ -17,7 +17,7 @@ image = cv2.imread("test.jpg")
 rotation, translation = facepose(image, mode=3)
 
 # Calling the get_pose function
-rotation, translation = facepose.get_pose(image, mode=3)
+rotation, translation = facepose.get_pose(image, mode=3, frame_weights=[8,5,2])
 
 print("Rotation [Yaw, Pitch, Roll]")
 print(rotation)
